@@ -7,6 +7,7 @@ from scli.core import (
     list_threads,
     read_draft,
     read_thread,
+    reply_to_thread,
     search,
     update_draft,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "list_threads",
     "read_draft",
     "read_thread",
+    "reply_to_thread",
     "search",
     "update_draft",
 ]

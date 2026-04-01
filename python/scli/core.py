@@ -353,6 +353,44 @@ _JS_INJECT_DRAFT = """\
 }})()
 """
 
+_JS_REPLY_DRAFT = """\
+(async () => {{
+    try {{
+        const account = window.__scli_account;
+        if (!account) return {{ error: 'No account. Run find_main first.' }};
+        const threads = account.threads;
+        const mockOp = {{ watching: true, uniqueCallback: () => {{}}, onUnwatch: () => {{}} }};
+        const presenter = threads.getPresenter(mockOp, '{thread_id}');
+        await presenter.loadMetadata({{ context: 'scli-reply' }});
+
+        const messages = presenter.metadata.messages || [];
+        const valid = messages.filter(m => m.from?.email !== 'reminder@superhuman.com');
+        if (valid.length === 0) return {{ error: 'No valid messages in thread {thread_id}' }};
+        const lastMsg = valid[valid.length - 1];
+
+        const draft = await presenter.createOrReplaceDraftAsync(lastMsg.id);
+        if (!draft) return {{ error: 'createOrReplaceDraftAsync returned null' }};
+
+        const body = {body_json};
+        if (body) draft.set({{ body }});
+
+        await presenter.saveDraft(draft, {{ saveAttachments: true, updateOutputs: true }});
+
+        return {{
+            draft_id: draft.id,
+            thread_id: draft.threadId,
+            action: typeof draft.getAction === 'function' ? draft.getAction() : draft.action,
+            subject: typeof draft.getSubject === 'function' ? draft.getSubject() : draft.subject || '',
+            to: (typeof draft.getTo === 'function' ? draft.getTo() : draft.to || []).map(c => c.email || c),
+            cc: (typeof draft.getCc === 'function' ? draft.getCc() : draft.cc || []).map(c => c.email || c),
+            in_reply_to: lastMsg.id,
+        }};
+    }} catch(e) {{
+        return {{ error: e.message }};
+    }}
+}})()
+"""
+
 # ---------------------------------------------------------------------------
 # CDP helpers
 # ---------------------------------------------------------------------------
@@ -534,6 +572,25 @@ def inject_draft(account=None, *, to, subject="", body="", cc=None, bcc=None, po
         "bcc": _build_recipients(bcc or []),
     }
     js = _JS_INJECT_DRAFT.format(fields_json=json.dumps(fields))
+    return _cdp_eval(ws_url, js)
+
+
+def reply_to_thread(thread_id, body="", *, account=None, port=CDP_PORT):
+    """Reply-all to an existing thread in Superhuman.
+
+    Creates a reply-all draft in the thread, auto-populating To and CC
+    from thread context.
+
+    Args:
+        thread_id: Thread ID (hex string from search/inbox results).
+        body: Reply body (HTML supported).
+        account: Email account. Auto-detected if omitted.
+
+    Returns dict: {draft_id, thread_id, action, subject, to, cc, in_reply_to}
+    """
+    _, ws_url = resolve_account(account, port)
+    _cdp_eval(ws_url, _JS_FIND_MAIN)
+    js = _JS_REPLY_DRAFT.format(thread_id=thread_id, body_json=json.dumps(body))
     return _cdp_eval(ws_url, js)
 
 

@@ -10,6 +10,7 @@ from scli.core import (
     list_threads,
     read_draft,
     read_thread,
+    reply_to_thread,
     search,
     update_draft,
 )
@@ -121,6 +122,25 @@ def superhuman_inject_draft(
         account: Superhuman account email (auto-detects if omitted).
     """
     return inject_draft(account, to=to, subject=subject, body=body, cc=cc, bcc=bcc)
+
+
+@mcp.tool()
+def superhuman_reply_thread(
+    thread_id: str,
+    body: str = "",
+    account: str | None = None,
+) -> dict:
+    """Reply-all to an existing email thread in Superhuman.
+
+    Creates a reply-all draft in the thread, auto-populating To and CC
+    from the thread context.
+
+    Args:
+        thread_id: The thread ID to reply to.
+        body: Reply body (HTML supported).
+        account: Superhuman account email (auto-detects if omitted).
+    """
+    return reply_to_thread(thread_id, body=body, account=account)
 
 
 @mcp.tool()
