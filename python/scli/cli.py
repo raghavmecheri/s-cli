@@ -7,12 +7,14 @@ import sys
 
 from scli.core import (
     attach_file,
+    delete_draft,
     get_accounts,
     inject_draft,
     list_drafts,
     list_threads,
     read_draft,
     read_thread,
+    reply_to_thread,
     search,
     update_draft,
 )
@@ -35,6 +37,8 @@ def main():
     parser.add_argument("--read", "-r", metavar="DRAFT_ID", help="Read a draft's full content")
     parser.add_argument("--edit", "-e", metavar="DRAFT_ID", help="Edit an existing draft")
     parser.add_argument("--attach", nargs=2, metavar=("DRAFT_ID", "FILE"), help="Attach a file to a draft")
+    parser.add_argument("--delete", metavar="DRAFT_ID", help="Delete a draft")
+    parser.add_argument("--reply", metavar="THREAD_ID", help="Reply-all in a thread (provide thread ID)")
 
     # Email reading
     parser.add_argument("--inbox", action="store_true", help="List inbox threads")
@@ -70,6 +74,10 @@ def main():
             _cmd_edit(args)
         elif args.attach:
             _cmd_attach(args)
+        elif args.delete:
+            _cmd_delete(args)
+        elif args.reply:
+            _cmd_reply(args)
         elif args.to:
             _cmd_inject(args)
         else:
@@ -241,6 +249,25 @@ def _cmd_inject(args):
     print(f"  To:      {', '.join(result.get('to', []))}")
 
 
+def _cmd_reply(args):
+    body = args.body
+    if body is None and not sys.stdin.isatty():
+        body = sys.stdin.read()
+    result = reply_to_thread(
+        args.reply, body=body or "", account=args.account, port=args.port,
+    )
+    if args.json_output:
+        print(json.dumps(result))
+        return
+    print(f"Reply draft created: {result.get('draft_id')}")
+    print(f"  Thread:  {result.get('thread_id')}")
+    print(f"  Subject: {result.get('subject')}")
+    print(f"  To:      {', '.join(result.get('to', []))}")
+    cc = result.get('cc', [])
+    if cc:
+        print(f"  CC:      {', '.join(cc)}")
+
+
 def _cmd_attach(args):
     draft_id, file_path = args.attach
     result = attach_file(draft_id, file_path, account=args.account, port=args.port)
@@ -250,6 +277,16 @@ def _cmd_attach(args):
         return
 
     print(f"Attached to {result.get('draft_id')}: {result.get('attached')} ({result.get('size', 0)} bytes)")
+
+
+def _cmd_delete(args):
+    result = delete_draft(args.delete, account=args.account, port=args.port)
+
+    if args.json_output:
+        print(json.dumps(result))
+        return
+
+    print(f"Deleted draft: {result.get('draft_id')}")
 
 
 if __name__ == "__main__":

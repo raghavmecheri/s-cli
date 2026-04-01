@@ -4,12 +4,14 @@ from mcp.server.fastmcp import FastMCP
 
 from scli.core import (
     attach_file,
+    delete_draft,
     get_accounts,
     inject_draft,
     list_drafts,
     list_threads,
     read_draft,
     read_thread,
+    reply_to_thread,
     search,
     update_draft,
 )
@@ -124,6 +126,25 @@ def superhuman_inject_draft(
 
 
 @mcp.tool()
+def superhuman_reply_thread(
+    thread_id: str,
+    body: str = "",
+    account: str | None = None,
+) -> dict:
+    """Reply-all to an existing email thread in Superhuman.
+
+    Creates a reply-all draft in the thread, auto-populating To and CC
+    from the thread context.
+
+    Args:
+        thread_id: The thread ID to reply to.
+        body: Reply body (HTML supported).
+        account: Superhuman account email (auto-detects if omitted).
+    """
+    return reply_to_thread(thread_id, body=body, account=account)
+
+
+@mcp.tool()
 def superhuman_update_draft(
     draft_id: str,
     subject: str | None = None,
@@ -145,6 +166,17 @@ def superhuman_update_draft(
         account: Superhuman account email (auto-detects if omitted).
     """
     return update_draft(draft_id, subject=subject, body=body, to=to, cc=cc, bcc=bcc, account=account)
+
+
+@mcp.tool()
+def superhuman_delete_draft(draft_id: str, account: str | None = None) -> dict:
+    """Delete a draft from Superhuman.
+
+    Args:
+        draft_id: The draft ID to delete.
+        account: Superhuman account email (auto-detects if omitted).
+    """
+    return delete_draft(draft_id, account=account)
 
 
 @mcp.tool()

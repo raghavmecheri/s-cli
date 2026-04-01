@@ -155,19 +155,38 @@ _JS_READ_THREAD = """\
             subject: t.subject || '',
             message_count: t.messages?.length || 0,
             labels: t.labelIds || [],
-            messages: (t.messages || []).map(m => ({{
-                id: m.id,
-                from: m.from?.email || '',
-                from_name: m.from?.name || '',
-                to: (m.to || []).map(c => c.email),
-                cc: (m.cc || []).map(c => c.email),
-                date: m.date?.toISOString?.() || '',
-                subject: m.subject || '',
-                snippet: m.snippet || '',
-                body: (m.body || '').substring(0, 50000),
-                attachments: (m.nonInlineAttachments || []).map(a => ({{ name: a.name, type: a.type, size: a.size }})),
-                labels: m.labelIds || [],
-            }})),
+            messages: (t.messages || []).map(m => {{
+                let body = '';
+                try {{ body = typeof m.getBody === 'function' ? m.getBody() : ''; }} catch(e) {{}}
+                if (!body) try {{ body = typeof m.body === 'string' ? m.body : ''; }} catch(e) {{}}
+                if (!body && m.payload) {{
+                    try {{
+                        const parts = m.payload.parts || [m.payload];
+                        for (const p of parts) {{
+                            if (p.mimeType === 'text/html' && p.body?.data) {{
+                                body = atob(p.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+                                break;
+                            }}
+                            if (p.mimeType === 'text/plain' && p.body?.data) {{
+                                body = atob(p.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+                            }}
+                        }}
+                    }} catch(e) {{}}
+                }}
+                return {{
+                    id: m.id,
+                    from: m.from?.email || '',
+                    from_name: m.from?.name || '',
+                    to: (m.to || []).map(c => c.email),
+                    cc: (m.cc || []).map(c => c.email),
+                    date: m.date?.toISOString?.() || '',
+                    subject: m.subject || '',
+                    snippet: m.snippet || '',
+                    body: (body || '').substring(0, 50000),
+                    attachments: (m.nonInlineAttachments || []).map(a => ({{ name: a.name, type: a.type, size: a.size }})),
+                    labels: m.labelIds || [],
+                }};
+            }}),
         }};
     }} catch(e) {{
         return {{ error: e.message }};
@@ -223,12 +242,16 @@ _JS_UPDATE_DRAFT = """\
 
         const updates = {updates_json};
 
-        // Convert email strings to contact objects for to/cc/bcc/from
-        const toContact = (e) => ({{ email: e.email || e, raw: (e.name || e.email || e) + ' <' + (e.email || e) + '>', name: e.name || (e.email || e).split('@')[0].replace('.', ' '), rawName: e.name || '' }});
-        if (updates.to) updates.to = updates.to.map(toContact);
-        if (updates.cc) updates.cc = updates.cc.map(toContact);
-        if (updates.bcc) updates.bcc = updates.bcc.map(toContact);
-        if (updates.from) updates.from = toContact(updates.from);
+        // Resolve email strings/objects to full contact objects matching inject_draft format
+        const resolveContact = (e) => {{
+            const email = e.email || e;
+            const name = e.name || email.split('@')[0].replace(/\\./g, ' ');
+            return {{ email, raw: name + ' <' + email + '>', name, rawName: e.name || '' }};
+        }};
+        if (updates.to) updates.to = updates.to.map(resolveContact);
+        if (updates.cc) updates.cc = updates.cc.map(resolveContact);
+        if (updates.bcc) updates.bcc = updates.bcc.map(resolveContact);
+        if (updates.from) updates.from = resolveContact(updates.from);
 
         d.set(updates);
 
@@ -244,6 +267,33 @@ _JS_UPDATE_DRAFT = """\
             to: (typeof d.getTo === 'function' ? d.getTo() : d.to || []).map(c => c.email || c),
             dirty: d.dirty,
         }};
+    }} catch(e) {{
+        return {{ error: e.message }};
+    }}
+}})()
+"""
+
+# Template — caller must .format(draft_id=...)
+_JS_DELETE_DRAFT = """\
+(async () => {{
+    try {{
+        const account = window.__scli_account;
+        if (!account) return {{ error: 'No account. Run find_main first.' }};
+        const tree = account.di.get('viewState').tree;
+        const threads = account.threads;
+        const drafts = tree.get('drafts') || {{}};
+        const draftId = '{draft_id}';
+        const entry = drafts[draftId];
+        if (!entry?.draft) return {{ error: 'Draft not found: ' + draftId }};
+        const d = entry.draft;
+        const threadId = d.threadId;
+
+        // Delete via presenter
+        const mockOp = {{ watching: true, uniqueCallback: () => {{}}, onUnwatch: () => {{}} }};
+        const presenter = threads.getPresenter(mockOp, threadId);
+        await presenter.deleteDraft(d);
+
+        return {{ deleted: true, draft_id: draftId, thread_id: threadId }};
     }} catch(e) {{
         return {{ error: e.message }};
     }}
@@ -346,6 +396,51 @@ _JS_INJECT_DRAFT = """\
             thread_id: draft.threadId,
             subject: typeof draft.getSubject === 'function' ? draft.getSubject() : draft.subject,
             to: (typeof draft.getTo === 'function' ? draft.getTo() : draft.to || []).map(c => c.email || c),
+        }};
+    }} catch(e) {{
+        return {{ error: e.message }};
+    }}
+}})()
+"""
+
+_JS_REPLY_DRAFT = """\
+(async () => {{
+    try {{
+        const account = window.__scli_account;
+        if (!account) return {{ error: 'No account. Run find_main first.' }};
+        const threads = account.threads;
+        const mockOp = {{ watching: true, uniqueCallback: () => {{}}, onUnwatch: () => {{}} }};
+        const presenter = threads.getPresenter(mockOp, '{thread_id}');
+        await presenter.loadMetadata({{ context: 'scli-reply' }});
+
+        const messages = presenter.metadata.messages || [];
+        const skipFromAddrs = ['reminder@superhuman.com'];
+        const skipToAddrs = ['conversations@visia.ai', 'conversations@binit.ai'];
+        const valid = messages.filter(m => {{
+            if (skipFromAddrs.includes(m.from?.email)) return false;
+            const toEmails = (m.to || []).map(c => c.email);
+            if (toEmails.length === 1 && skipToAddrs.includes(toEmails[0])) return false;
+            return true;
+        }});
+        if (valid.length === 0) return {{ error: 'No valid messages in thread {thread_id}' }};
+        const lastMsg = valid[valid.length - 1];
+
+        const draft = await presenter.createOrReplaceDraftAsync(lastMsg.id);
+        if (!draft) return {{ error: 'createOrReplaceDraftAsync returned null' }};
+
+        const body = {body_json};
+        if (body) draft.set({{ body }});
+
+        await presenter.saveDraft(draft, {{ saveAttachments: true, updateOutputs: true }});
+
+        return {{
+            draft_id: draft.id,
+            thread_id: draft.threadId,
+            action: typeof draft.getAction === 'function' ? draft.getAction() : draft.action,
+            subject: typeof draft.getSubject === 'function' ? draft.getSubject() : draft.subject || '',
+            to: (typeof draft.getTo === 'function' ? draft.getTo() : draft.to || []).map(c => c.email || c),
+            cc: (typeof draft.getCc === 'function' ? draft.getCc() : draft.cc || []).map(c => c.email || c),
+            in_reply_to: lastMsg.id,
         }};
     }} catch(e) {{
         return {{ error: e.message }};
@@ -537,6 +632,25 @@ def inject_draft(account=None, *, to, subject="", body="", cc=None, bcc=None, po
     return _cdp_eval(ws_url, js)
 
 
+def reply_to_thread(thread_id, body="", *, account=None, port=CDP_PORT):
+    """Reply-all to an existing thread in Superhuman.
+
+    Creates a reply-all draft in the thread, auto-populating To and CC
+    from thread context.
+
+    Args:
+        thread_id: Thread ID (hex string from search/inbox results).
+        body: Reply body (HTML supported).
+        account: Email account. Auto-detected if omitted.
+
+    Returns dict: {draft_id, thread_id, action, subject, to, cc, in_reply_to}
+    """
+    _, ws_url = resolve_account(account, port)
+    _cdp_eval(ws_url, _JS_FIND_MAIN)
+    js = _JS_REPLY_DRAFT.format(thread_id=thread_id, body_json=json.dumps(body))
+    return _cdp_eval(ws_url, js)
+
+
 def list_drafts(account=None, *, port=CDP_PORT):
     """List all drafts for an account.
 
@@ -654,6 +768,21 @@ def update_draft(draft_id, *, subject=None, body=None, to=None, cc=None, bcc=Non
         raise RuntimeError("No fields to update. Provide at least one of: subject, body, to, cc, bcc.")
 
     js = _JS_UPDATE_DRAFT.format(draft_id=draft_id, updates_json=json.dumps(updates))
+    return _cdp_eval(ws_url, js)
+
+
+def delete_draft(draft_id, *, account=None, port=CDP_PORT):
+    """Delete a draft from Superhuman.
+
+    Args:
+        draft_id: The draft ID to delete.
+        account: Email account. Auto-detected if omitted.
+
+    Returns dict: {deleted, draft_id, thread_id}
+    """
+    _, ws_url = resolve_account(account, port)
+    _cdp_eval(ws_url, _JS_FIND_MAIN)
+    js = _JS_DELETE_DRAFT.format(draft_id=draft_id)
     return _cdp_eval(ws_url, js)
 
 
