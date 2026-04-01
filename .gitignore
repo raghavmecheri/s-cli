@@ -1,0 +1,9 @@
+__pycache__/
+*.egg-info/
+dist/
+build/
+*.pyc
+.eggs/
+node_modules/
+typescript/dist/
+.env

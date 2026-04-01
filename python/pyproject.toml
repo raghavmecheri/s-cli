@@ -1,0 +1,59 @@
+[project]
+name = "s-cli"
+version = "0.1.0"
+description = "Programmatic CLI to interact with Superhuman email client via CDP"
+# readme lives in repo root, not referenced here
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "websocket-client>=1.0",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.4",
+    "pyright>=1.1",
+]
+
+[project.scripts]
+s-cli = "scli.cli:main"
+sdraft = "sdraft.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# --- Ruff (inherited from visia core) ---
+
+[tool.ruff]
+line-length = 150
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "C", "N", "RUF"]
+ignore = ["E402", "C901", "E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["scli", "sdraft"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+# --- Pytest ---
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-v"
+
+# --- Pyright ---
+
+[tool.pyright]
+pythonVersion = "3.10"
+venvPath = ".venv"
+reportAttributeAccessIssue = "warning"
+reportIncompatibleVariableOverride = "warning"

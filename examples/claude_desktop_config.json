@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "s-cli": {
+      "command": "python3",
+      "args": ["-m", "scli.mcp_server"]
+    }
+  }
+}
