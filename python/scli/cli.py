@@ -7,6 +7,7 @@ import sys
 
 from scli.core import (
     attach_file,
+    delete_draft,
     get_accounts,
     inject_draft,
     list_drafts,
@@ -36,6 +37,7 @@ def main():
     parser.add_argument("--read", "-r", metavar="DRAFT_ID", help="Read a draft's full content")
     parser.add_argument("--edit", "-e", metavar="DRAFT_ID", help="Edit an existing draft")
     parser.add_argument("--attach", nargs=2, metavar=("DRAFT_ID", "FILE"), help="Attach a file to a draft")
+    parser.add_argument("--delete", metavar="DRAFT_ID", help="Delete a draft")
     parser.add_argument("--reply", metavar="THREAD_ID", help="Reply-all in a thread (provide thread ID)")
 
     # Email reading
@@ -72,6 +74,8 @@ def main():
             _cmd_edit(args)
         elif args.attach:
             _cmd_attach(args)
+        elif args.delete:
+            _cmd_delete(args)
         elif args.reply:
             _cmd_reply(args)
         elif args.to:
@@ -273,6 +277,16 @@ def _cmd_attach(args):
         return
 
     print(f"Attached to {result.get('draft_id')}: {result.get('attached')} ({result.get('size', 0)} bytes)")
+
+
+def _cmd_delete(args):
+    result = delete_draft(args.delete, account=args.account, port=args.port)
+
+    if args.json_output:
+        print(json.dumps(result))
+        return
+
+    print(f"Deleted draft: {result.get('draft_id')}")
 
 
 if __name__ == "__main__":

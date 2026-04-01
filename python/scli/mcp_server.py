@@ -4,6 +4,7 @@ from mcp.server.fastmcp import FastMCP
 
 from scli.core import (
     attach_file,
+    delete_draft,
     get_accounts,
     inject_draft,
     list_drafts,
@@ -165,6 +166,17 @@ def superhuman_update_draft(
         account: Superhuman account email (auto-detects if omitted).
     """
     return update_draft(draft_id, subject=subject, body=body, to=to, cc=cc, bcc=bcc, account=account)
+
+
+@mcp.tool()
+def superhuman_delete_draft(draft_id: str, account: str | None = None) -> dict:
+    """Delete a draft from Superhuman.
+
+    Args:
+        draft_id: The draft ID to delete.
+        account: Superhuman account email (auto-detects if omitted).
+    """
+    return delete_draft(draft_id, account=account)
 
 
 @mcp.tool()

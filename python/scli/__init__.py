@@ -1,5 +1,6 @@
 from scli.core import (
     attach_file,
+    delete_draft,
     ensure_connection,
     get_accounts,
     inject_draft,
@@ -14,6 +15,7 @@ from scli.core import (
 
 __all__ = [
     "attach_file",
+    "delete_draft",
     "ensure_connection",
     "get_accounts",
     "inject_draft",
