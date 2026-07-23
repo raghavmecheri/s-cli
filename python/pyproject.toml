@@ -7,6 +7,7 @@ license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "websocket-client>=1.0",
+    "markdown>=3.4",
 ]
 
 [project.optional-dependencies]
@@ -21,10 +22,15 @@ dev = [
 [project.scripts]
 s-cli = "scli.cli:main"
 sdraft = "sdraft.cli:main"
+sdraft-bridge = "sdraft.bridge:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["scli*", "sdraft*"]
 
 # --- Ruff (inherited from visia core) ---
 

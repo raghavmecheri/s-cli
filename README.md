@@ -90,6 +90,35 @@ Superhuman is an Electron app. When launched with `--remote-debugging-port=9222`
 
 s-cli auto-launches Superhuman with the debug port if it's not already running.
 
+## Draft bridge adapter
+
+`sdraft.bridge` is a draft-only adapter for an external HTTP draft bridge (e.g.
+the owner-gated Superhuman draft bridge on the Architect VM). It reads a bridge
+JSON payload from a file, converts the markdown body to HTML, and injects a
+**compose** draft via `scli.core.inject_draft`. It never sends and rejects any
+send-shaped field.
+
+```bash
+sdraft-bridge draft --json-file /path/to/input.json --account you@company.com
+# or: python3 -m sdraft.bridge draft --json-file input.json --account you@company.com
+```
+
+Input JSON (subset the bridge produces):
+
+```json
+{
+  "to": ["recipient@example.com"],
+  "cc": [], "bcc": [],
+  "subject": "Follow-up",
+  "body_markdown": "Hi ...",
+  "reply_to": null
+}
+```
+
+Success prints a single JSON object (`{draft_id, thread_id, subject, to}`) to
+stdout; any failure prints a JSON error to stderr and exits non-zero. `reply_to`
+is compose-only (v1) and must be null/absent.
+
 ## Project Structure
 
 ```
@@ -97,6 +126,8 @@ python/scli/
   core.py          # Stateless CDP functions — the engine
   cli.py           # CLI wrapper
   mcp_server.py    # MCP server for Claude Desktop
+python/sdraft/
+  bridge.py        # Draft-only adapter for an external HTTP draft bridge
 typescript/        # SDK stub (contributions welcome)
 examples/          # Usage examples + Claude Desktop config
 ```
