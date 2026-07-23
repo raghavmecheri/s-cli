@@ -28,6 +28,10 @@ sdraft-bridge = "sdraft.bridge:main"
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["scli*", "sdraft*"]
+
 # --- Ruff (inherited from visia core) ---
 
 [tool.ruff]
